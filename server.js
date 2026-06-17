@@ -91,7 +91,6 @@ io.on("connection", (socket) => {
  socket.on("disconnect", () => {
     const usuario = usuarios.get(socket.id);
 
-    // 👇 MODIFICADO: avisar a la sala si estaba en una
     if (usuario?.sala) {
       io.to(usuario.sala).emit("mensajeSistema", `${usuario.nombre} se desconectó`);
     }
