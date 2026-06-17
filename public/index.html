@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat WebSocket Render</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: white; margin: 0; }
+    .container { max-width: 1000px; margin: auto; padding: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+    .card { background: #111827; border-radius: 14px; padding: 18px; border: 1px solid #334155; }
+    input, select, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 0; }
+    button { background: #38bdf8; color: #082f49; font-weight: bold; cursor: pointer; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 8px; border-bottom: 1px solid #334155; }
+    .msg { background: #1e293b; margin: 8px 0; padding: 10px; border-radius: 10px; }
+    .system { color: #facc15; font-style: italic; }
+    .private { border-left: 4px solid #f472b6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Chat en tiempo real</h1>
+    <p>Aplicación publicada con Node.js, Express, Socket.IO y Render.</p>
+
+    <div class="card" id="registro">
+      <h2>Registro</h2>
+      <input id="nombre" placeholder="Escribe tu nombre" />
+      <button onclick="registrar()">Entrar al chat</button>
+    </div>
+
+    <div class="grid" id="chat" style="display:none">
+      <div class="card">
+        <h2>Usuarios conectados</h2>
+        <ul id="usuarios"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Mensajes</h2>
+        <div id="mensajes"></div>
+
+        <h3>Mensaje global</h3>
+        <input id="mensaje" placeholder="Escribe un mensaje para todos" />
+        <button onclick="enviarGlobal()">Enviar a todos</button>
+
+        <h3>Mensaje privado</h3>
+        <select id="destino"></select>
+        <input id="mensajePrivado" placeholder="Mensaje privado" />
+        <button onclick="enviarPrivado()">Enviar privado</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let miNombre = "";
+
+    function registrar() {
+      miNombre = document.getElementById("nombre").value.trim();
+      if (!miNombre) {
+        alert("Escribe tu nombre");
+        return;
+      }
+
+      socket.emit("registrarUsuario", miNombre);
+      document.getElementById("registro").style.display = "none";
+      document.getElementById("chat").style.display = "grid";
+    }
+
+    function enviarGlobal() {
+      const input = document.getElementById("mensaje");
+      const mensaje = input.value.trim();
+      if (!mensaje) return;
+
+      socket.emit("mensajeGlobal", {
+        usuario: miNombre,
+        mensaje
+      });
+
+      input.value = "";
+    }
+
+    function enviarPrivado() {
+      const destinoId = document.getElementById("destino").value;
+      const input = document.getElementById("mensajePrivado");
+      const mensaje = input.value.trim();
+      if (!destinoId || !mensaje) return;
+
+      socket.emit("mensajePrivado", {
+        destinoId,
+        usuario: miNombre,
+        mensaje
+      });
+
+      agregarMensaje(`Privado enviado: ${mensaje}`, "private");
+      input.value = "";
+    }
+
+    socket.on("usuariosActualizados", (usuarios) => {
+      const lista = document.getElementById("usuarios");
+      const destino = document.getElementById("destino");
+      lista.innerHTML = "";
+      destino.innerHTML = "<option value=''>Selecciona un usuario</option>";
+
+      usuarios.forEach((usuario) => {
+        const li = document.createElement("li");
+        li.textContent = `${usuario.nombre} (${usuario.id})`;
+        lista.appendChild(li);
+
+        if (usuario.nombre !== miNombre) {
+          const option = document.createElement("option");
+          option.value = usuario.id;
+          option.textContent = usuario.nombre;
+          destino.appendChild(option);
+        }
+      });
+    });
+
+    socket.on("mensajeGlobal", (data) => {
+      agregarMensaje(`${data.hora} - ${data.usuario}: ${data.mensaje}`);
+    });
+
+    socket.on("mensajePrivado", (data) => {
+      agregarMensaje(`${data.hora} - Privado de ${data.usuario}: ${data.mensaje}`, "private");
+    });
+
+    socket.on("mensajeSistema", (mensaje) => {
+      agregarMensaje(mensaje, "system");
+    });
+
+    function agregarMensaje(texto, clase = "") {
+      const div = document.createElement("div");
+      div.className = `msg ${clase}`;
+      div.textContent = texto;
+      document.getElementById("mensajes").appendChild(div);
+      div.scrollIntoView();
+    }
+  </script>
+</body>
+</html>
