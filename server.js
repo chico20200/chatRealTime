@@ -23,7 +23,8 @@ io.on("connection", (socket) => {
   socket.on("registrarUsuario", (nombre) => {
     const usuario = {
       id: socket.id,
-      nombre: nombre || "Anónimo"
+      nombre: nombre || "Anónimo",
+      sala: null
     };
 
     usuarios.set(socket.id, usuario);
@@ -32,12 +33,51 @@ io.on("connection", (socket) => {
     io.emit("mensajeSistema", `${usuario.nombre} se conectó`);
   });
 
+   socket.on("entrarSala", (nombreSala) => {
+    const usuario = usuarios.get(socket.id);
+    if (!usuario) return;
+
+    // Si ya estaba en otra sala, la abandona primero
+    if (usuario.sala) {
+      socket.leave(usuario.sala);
+      io.to(usuario.sala).emit("mensajeSistema", `${usuario.nombre} salió de la sala`);
+    }
+
+    socket.join(nombreSala);
+    usuario.sala = nombreSala;
+    usuarios.set(socket.id, usuario);
+
+    io.to(nombreSala).emit("mensajeSistema", `${usuario.nombre} entró en la sala "${nombreSala}"`);
+    io.emit("usuariosActualizados", Array.from(usuarios.values()));
+  });
+
+  socket.on("salirSala", () => {
+    const usuario = usuarios.get(socket.id);
+    if (!usuario || !usuario.sala) return;
+
+    const salaAnterior = usuario.sala;
+    socket.leave(salaAnterior);
+    usuario.sala = null;
+    usuarios.set(socket.id, usuario);
+
+    io.to(salaAnterior).emit("mensajeSistema", `${usuario.nombre} salió de la sala`);
+    io.emit("usuariosActualizados", Array.from(usuarios.values()));
+  });
+
+
   socket.on("mensajeGlobal", (data) => {
-    io.emit("mensajeGlobal", {
+    const usuario = usuarios.get(socket.id);
+    const mensaje = {
       usuario: data.usuario,
       mensaje: data.mensaje,
       hora: new Date().toLocaleTimeString()
-    });
+    };
+
+    if (usuario?.sala) {
+      io.to(usuario.sala).emit("mensajeGlobal", mensaje);
+    } else {
+      io.emit("mensajeGlobal", mensaje);
+    }
   });
 
   socket.on("mensajePrivado", (data) => {
@@ -48,10 +88,15 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("disconnect", () => {
+ socket.on("disconnect", () => {
     const usuario = usuarios.get(socket.id);
-    usuarios.delete(socket.id);
 
+    // 👇 MODIFICADO: avisar a la sala si estaba en una
+    if (usuario?.sala) {
+      io.to(usuario.sala).emit("mensajeSistema", `${usuario.nombre} se desconectó`);
+    }
+
+    usuarios.delete(socket.id);
     io.emit("usuariosActualizados", Array.from(usuarios.values()));
 
     if (usuario) {

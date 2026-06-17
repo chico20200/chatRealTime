@@ -9,13 +9,16 @@
     .container { max-width: 1000px; margin: auto; padding: 20px; }
     .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
     .card { background: #111827; border-radius: 14px; padding: 18px; border: 1px solid #334155; }
-    input, select, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 0; }
+    input, select, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 0; box-sizing: border-box; }
     button { background: #38bdf8; color: #082f49; font-weight: bold; cursor: pointer; }
+    button.danger { background: #f87171; color: #450a0a; }
     ul { list-style: none; padding: 0; }
     li { padding: 8px; border-bottom: 1px solid #334155; }
     .msg { background: #1e293b; margin: 8px 0; padding: 10px; border-radius: 10px; }
     .system { color: #facc15; font-style: italic; }
     .private { border-left: 4px solid #f472b6; }
+    .sala-badge { display: inline-block; background: #0ea5e9; color: #082f49; font-size: 12px; font-weight: bold; border-radius: 6px; padding: 2px 8px; margin-left: 6px; }
+    #sala-actual { color: #38bdf8; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -30,19 +33,34 @@
     </div>
 
     <div class="grid" id="chat" style="display:none">
-      <div class="card">
-        <h2>Usuarios conectados</h2>
-        <ul id="usuarios"></ul>
+      <div>
+        <div class="card" style="margin-bottom: 20px;">
+          <h2>Usuarios conectados</h2>
+          <ul id="usuarios"></ul>
+        </div>
+
+        <!-- SECCIÓN NUEVA: Salas -->
+        <div class="card">
+          <h2>Salas</h2>
+          <p style="margin: 0 0 8px; font-size: 14px; color: #94a3b8;">
+            Sala actual: <span id="sala-actual">Ninguna</span>
+          </p>
+          <select id="sala-select">
+            <option value="general">general</option>
+            <option value="random">random</option>
+            <option value="ayuda">ayuda</option>
+          </select>
+          <button onclick="entrarSala()">Entrar a sala</button>
+          <button class="danger" onclick="salirSala()">Salir de sala</button>
+        </div>
       </div>
 
       <div class="card">
         <h2>Mensajes</h2>
         <div id="mensajes"></div>
-
         <h3>Mensaje global</h3>
         <input id="mensaje" placeholder="Escribe un mensaje para todos" />
         <button onclick="enviarGlobal()">Enviar a todos</button>
-
         <h3>Mensaje privado</h3>
         <select id="destino"></select>
         <input id="mensajePrivado" placeholder="Mensaje privado" />
@@ -58,26 +76,30 @@
 
     function registrar() {
       miNombre = document.getElementById("nombre").value.trim();
-      if (!miNombre) {
-        alert("Escribe tu nombre");
-        return;
-      }
-
+      if (!miNombre) { alert("Escribe tu nombre"); return; }
       socket.emit("registrarUsuario", miNombre);
       document.getElementById("registro").style.display = "none";
       document.getElementById("chat").style.display = "grid";
+    }
+
+    // NUEVO: entrar a una sala
+    function entrarSala() {
+      const sala = document.getElementById("sala-select").value;
+      socket.emit("entrarSala", sala);
+      document.getElementById("sala-actual").textContent = sala;
+    }
+
+    // NUEVO: salir de la sala
+    function salirSala() {
+      socket.emit("salirSala");
+      document.getElementById("sala-actual").textContent = "Ninguna";
     }
 
     function enviarGlobal() {
       const input = document.getElementById("mensaje");
       const mensaje = input.value.trim();
       if (!mensaje) return;
-
-      socket.emit("mensajeGlobal", {
-        usuario: miNombre,
-        mensaje
-      });
-
+      socket.emit("mensajeGlobal", { usuario: miNombre, mensaje });
       input.value = "";
     }
 
@@ -86,13 +108,7 @@
       const input = document.getElementById("mensajePrivado");
       const mensaje = input.value.trim();
       if (!destinoId || !mensaje) return;
-
-      socket.emit("mensajePrivado", {
-        destinoId,
-        usuario: miNombre,
-        mensaje
-      });
-
+      socket.emit("mensajePrivado", { destinoId, usuario: miNombre, mensaje });
       agregarMensaje(`Privado enviado: ${mensaje}`, "private");
       input.value = "";
     }
@@ -102,12 +118,11 @@
       const destino = document.getElementById("destino");
       lista.innerHTML = "";
       destino.innerHTML = "<option value=''>Selecciona un usuario</option>";
-
       usuarios.forEach((usuario) => {
         const li = document.createElement("li");
-        li.textContent = `${usuario.nombre} (${usuario.id})`;
+        // Muestra la sala del usuario si tiene una
+        li.innerHTML = `${usuario.nombre}${usuario.sala ? `<span class="sala-badge">${usuario.sala}</span>` : ""}`;
         lista.appendChild(li);
-
         if (usuario.nombre !== miNombre) {
           const option = document.createElement("option");
           option.value = usuario.id;
@@ -136,7 +151,6 @@
       document.getElementById("mensajes").appendChild(div);
       div.scrollIntoView();
     }
-    /--ignorar sección de código--/
   </script>
 </body>
 </html>
